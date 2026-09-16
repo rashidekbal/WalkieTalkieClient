@@ -34,6 +34,7 @@ export default function App() {
   const [roomCode, setRoomCode] = useState('');
   const [roomTitle, setRoomTitle] = useState('WalkieTalkie Room');
   const [senderName, setSenderName] = useState('Guest');
+  const [currentSocketId, setCurrentSocketId] = useState('');
   
   const [messages, setMessages] = useState([]);
   const [messageText, setMessageText] = useState('');
@@ -82,6 +83,7 @@ export default function App() {
 
     socket.on('connect', () => {
       setIsOnline(true);
+      setCurrentSocketId(socket.id);
       socket.emit('join_room', { roomCode: code, senderName: user });
     });
 
@@ -107,8 +109,8 @@ export default function App() {
       setMessages((prev) => [...prev, { isSystem: true, text: `${leftUser} left the room.` }]);
     });
 
-    socket.on('user_typing', ({ senderName: typingUser, isTyping }) => {
-      if (isTyping && typingUser !== user) {
+    socket.on('user_typing', ({ senderName: typingUser, senderSocketId, isTyping }) => {
+      if (isTyping && senderSocketId !== socket.id) {
         setTypingNotice(`${typingUser} is typing...`);
       } else {
         setTypingNotice('');
@@ -272,6 +274,7 @@ export default function App() {
           <ChatLog
             messages={messages}
             currentSenderName={senderName}
+            currentSocketId={currentSocketId}
             onOpenImageModal={(url, fileName) => setActiveModalImage({ url, fileName })}
           />
 

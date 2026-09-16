@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { downloadFile } from '../utils/downloadHelper';
 
-export default function ChatLog({ messages, currentSenderName, onOpenImageModal }) {
+export default function ChatLog({ messages, currentSenderName, currentSocketId, onOpenImageModal }) {
   const logRef = useRef(null);
 
   useEffect(() => {
@@ -24,7 +24,15 @@ export default function ChatLog({ messages, currentSenderName, onOpenImageModal 
         }
 
         const sender = msg.sender_name || msg.senderName || 'Guest';
-        const isSelf = sender === currentSenderName;
+        const msgSocketId = msg.sender_socket_id || msg.senderSocketId;
+
+        // Associate user message with socket ID to prevent same-name collisions ("Guest", "Alex", etc.)
+        let isSelf = false;
+        if (msgSocketId && currentSocketId) {
+          isSelf = msgSocketId === currentSocketId;
+        } else {
+          isSelf = sender === currentSenderName;
+        }
         const mediaUrl = msg.media_url || msg.mediaUrl;
         const defaultFileName = msg.type === 'image' ? 'image.png' : 'attachment';
         const fileName = (msg.fileMeta && msg.fileMeta.fileName) || msg.file_name || defaultFileName;
