@@ -10,7 +10,7 @@ export function getFileNameWithExtension(url = '', fileName = 'download', mimeTy
   const hasExtension = /\.[a-zA-Z0-9]+$/.test(name);
   if (hasExtension) return name;
 
-  // Try extracting extension from URL
+  // Try extracting extension from URL path
   try {
     const cleanUrl = url.split('?')[0].split('#')[0];
     const match = cleanUrl.match(/\.([a-zA-Z0-9]+)$/);
@@ -52,115 +52,34 @@ export function getFileNameWithExtension(url = '', fileName = 'download', mimeTy
 }
 
 /**
- * Downloads a file given its URL, preferred filename, and optional mimeType.
- * Ensures the file is saved directly into Downloads with its original file extension.
+ * Direct file download helper.
+ * Triggers native browser download dialog with Content-Disposition attachment header via backend proxy.
  */
-export async function downloadFile(url, fileName = 'download', mimeType = '') {
+export function downloadFile(url, fileName = 'download', mimeType = '') {
   if (!url) return;
 
   const finalFileName = getFileNameWithExtension(url, fileName, mimeType);
 
-  try {
-    // 1. Data URLs or Blob URLs can be downloaded directly
-    if (url.startsWith('data:') || url.startsWith('blob:')) {
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = finalFileName;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      return;
-    }
-
-    // 2. Prepare URL: ONLY apply fl_attachment to /image/upload/ or /video/upload/.
-    // NEVER put fl_attachment in /raw/upload/ as Cloudinary returns 400/404 for raw transformations.
-    let downloadUrl = url;
-    if (downloadUrl.includes('/image/upload/') && !downloadUrl.includes('/fl_attachment')) {
-      downloadUrl = downloadUrl.replace('/image/upload/', '/image/upload/fl_attachment/');
-    }
-
-    // 3. Attempt direct fetch for client-side blob download
-    const response = await fetch(downloadUrl);
-    if (response.ok) {
-      const blob = await response.blob();
-      const blobUrl = window.URL.createObjectURL(blob);
-
-      const link = document.createElement('a');
-      link.href = blobUrl;
-      link.download = finalFileName;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-
-      setTimeout(() => {
-        window.URL.revokeObjectURL(blobUrl);
-      }, 10000);
-      return;
-    }
-
-    // 4. If direct fetch fails (e.g. 401 or CORS), use backend proxy download endpoint
-    const proxyUrl = `${API_BASE_URL}/api/media/download?url=${encodeURIComponent(url)}&name=${encodeURIComponent(finalFileName)}`;
-    const proxyResponse = await fetch(proxyUrl);
-    if (proxyResponse.ok) {
-      const blob = await proxyResponse.blob();
-      const blobUrl = window.URL.createObjectURL(blob);
-
-      const link = document.createElement('a');
-      link.href = blobUrl;
-      link.download = finalFileName;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-
-      setTimeout(() => {
-        window.URL.revokeObjectURL(blobUrl);
-      }, 10000);
-      return;
-    }
-
-    // 5. Fallback: direct anchor download
-    const link = document.createElement('a');
-    link.href = downloadUrl;
-    link.target = '_blank';
-    link.rel = 'noopener noreferrer';
-    link.download = finalFileName;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-
-  } catch (err) {
-    console.warn('Direct download failed, attempting backend proxy fallback:', err);
-    try {
-      const proxyUrl = `${API_BASE_URL}/api/media/download?url=${encodeURIComponent(url)}&name=${encodeURIComponent(finalFileName)}`;
-      const proxyResponse = await fetch(proxyUrl);
-      if (proxyResponse.ok) {
-        const blob = await proxyResponse.blob();
-        const blobUrl = window.URL.createObjectURL(blob);
-
-        const link = document.createElement('a');
-        link.href = blobUrl;
-        link.download = finalFileName;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-
-        setTimeout(() => {
-          window.URL.revokeObjectURL(blobUrl);
-        }, 10000);
-        return;
-      }
-    } catch (proxyErr) {
-      console.error('Backend proxy download failed:', proxyErr);
-    }
-
-    // Final fallback
+  // 1. Data URLs or Blob URLs can be downloaded directly
+  if (url.startsWith('data:') || url.startsWith('blob:')) {
     const link = document.createElement('a');
     link.href = url;
-    link.target = '_blank';
-    link.rel = 'noopener noreferrer';
     link.download = finalFileName;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    return;
   }
+
+  // 2. Trigger native download via server proxy endpoint with Content-Disposition: attachment header
+  const proxyDownloadUrl = `${API_BASE_URL}/api/media/download?url=${encodeURIComponent(url)}&name=${encodeURIComponent(finalFileName)}`;
+
+  const link = document.createElement('a');
+  link.href = proxyDownloadUrl;
+  link.download = finalFileName;
+  link.target = '_blank';
+  link.rel = 'noopener noreferrer';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
 }
