@@ -272,7 +272,7 @@ export default function App() {
           <ChatLog
             messages={messages}
             currentSenderName={senderName}
-            onOpenImageModal={(url) => setActiveModalImage(url)}
+            onOpenImageModal={(url, fileName) => setActiveModalImage({ url, fileName })}
           />
 
           {typingNotice && <div class="typing-indicator">{typingNotice}</div>}

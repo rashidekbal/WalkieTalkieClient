@@ -317,14 +317,35 @@ function appendMessage(msg) {
 
     const fileCard = document.createElement('div');
     fileCard.className = 'file-attachment-card';
-    fileCard.innerHTML = `
-      <span class="file-icon">📄</span>
-      <div class="file-details">
-        <span class="file-name">${escapeHtml(fileName)}</span>
-        <span class="file-size">${sizeFormatted}</span>
-      </div>
-      <a href="${fileUrl}" target="_blank" download class="btn btn-secondary btn-sm" style="margin-left:auto;">Download</a>
-    `;
+    
+    const fileDetails = document.createElement('div');
+    fileDetails.className = 'file-details';
+
+    const iconSpan = document.createElement('span');
+    iconSpan.className = 'file-icon';
+    iconSpan.textContent = '📄';
+
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'file-name';
+    nameSpan.textContent = fileName;
+
+    const sizeSpan = document.createElement('span');
+    sizeSpan.className = 'file-size';
+    sizeSpan.textContent = sizeFormatted;
+
+    fileDetails.appendChild(nameSpan);
+    fileDetails.appendChild(sizeSpan);
+
+    const downloadBtn = document.createElement('button');
+    downloadBtn.type = 'button';
+    downloadBtn.className = 'btn btn-secondary btn-sm';
+    downloadBtn.style.marginLeft = 'auto';
+    downloadBtn.textContent = 'Download';
+    downloadBtn.onclick = () => triggerFileDownload(fileUrl, fileName);
+
+    fileCard.appendChild(iconSpan);
+    fileCard.appendChild(fileDetails);
+    fileCard.appendChild(downloadBtn);
     bubbleDiv.appendChild(fileCard);
 
     if (msg.content) {
@@ -400,14 +421,57 @@ function leaveRoom() {
   landingCard.classList.remove('hidden');
 }
 
-function openImageModal(url) {
+function openImageModal(url, fileName = 'image.png') {
   modalImg.src = url;
-  modalDownloadLink.href = url;
+  modalDownloadLink.onclick = (e) => {
+    e.preventDefault();
+    triggerFileDownload(url, fileName);
+  };
   imageModal.classList.remove('hidden');
 }
 
 function closeImageModal() {
   imageModal.classList.add('hidden');
+}
+
+async function triggerFileDownload(url, fileName = 'download') {
+  if (!url) return;
+  try {
+    if (url.startsWith('data:') || url.startsWith('blob:')) {
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      return;
+    }
+
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`HTTP error ${response.status}`);
+    const blob = await response.blob();
+    const blobUrl = window.URL.createObjectURL(blob);
+
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    setTimeout(() => {
+      window.URL.revokeObjectURL(blobUrl);
+    }, 10000);
+  } catch (err) {
+    const link = document.createElement('a');
+    link.href = url;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
 }
 
 function escapeHtml(str) {

@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { downloadFile } from '../utils/downloadHelper';
 
 export default function ChatLog({ messages, currentSenderName, onOpenImageModal }) {
   const logRef = useRef(null);
@@ -10,13 +11,13 @@ export default function ChatLog({ messages, currentSenderName, onOpenImageModal 
   }, [messages]);
 
   return (
-    <div class="chat-log" ref={logRef}>
-      <div class="system-message">Joined room timeline. Start typing or share media files below.</div>
+    <div className="chat-log" ref={logRef}>
+      <div className="system-message">Joined room timeline. Start typing or share media files below.</div>
       
       {messages.map((msg, index) => {
         if (msg.isSystem) {
           return (
-            <div key={index} class="system-message">
+            <div key={index} className="system-message">
               {msg.text}
             </div>
           );
@@ -25,37 +26,43 @@ export default function ChatLog({ messages, currentSenderName, onOpenImageModal 
         const sender = msg.sender_name || msg.senderName || 'Guest';
         const isSelf = sender === currentSenderName;
         const mediaUrl = msg.media_url || msg.mediaUrl;
-        const fileName = (msg.fileMeta && msg.fileMeta.fileName) || msg.file_name || 'Download Attachment';
+        const defaultFileName = msg.type === 'image' ? 'image.png' : 'attachment';
+        const fileName = (msg.fileMeta && msg.fileMeta.fileName) || msg.file_name || defaultFileName;
         const fileSize = (msg.fileMeta && msg.fileMeta.fileSize) || msg.file_size || 0;
         const sizeFormatted = fileSize ? `${(fileSize / 1024).toFixed(1)} KB` : '';
         const dateObj = msg.created_at ? new Date(msg.created_at) : new Date();
         const timeFormatted = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
         return (
-          <div key={msg.id || index} class={`msg-item ${isSelf ? 'self' : 'other'}`}>
-            <span class="msg-sender">{sender}</span>
-            <div class="msg-bubble">
+          <div key={msg.id || index} className={`msg-item ${isSelf ? 'self' : 'other'}`}>
+            <span className="msg-sender">{sender}</span>
+            <div className="msg-bubble">
               {msg.type === 'image' && mediaUrl ? (
                 <div>
                   <img
                     src={mediaUrl}
                     alt="Uploaded media"
-                    class="msg-image"
-                    onClick={() => onOpenImageModal(mediaUrl)}
+                    className="msg-image"
+                    onClick={() => onOpenImageModal(mediaUrl, fileName)}
                   />
                   {msg.content && <p style={{ marginTop: '6px' }}>{msg.content}</p>}
                 </div>
               ) : msg.type === 'file' && mediaUrl ? (
                 <div>
-                  <div class="file-attachment-card">
-                    <span class="file-icon">📄</span>
-                    <div class="file-details">
-                      <span class="file-name">{fileName}</span>
-                      <span class="file-size">{sizeFormatted}</span>
+                  <div className="file-attachment-card">
+                    <span className="file-icon">📄</span>
+                    <div className="file-details">
+                      <span className="file-name">{fileName}</span>
+                      <span className="file-size">{sizeFormatted}</span>
                     </div>
-                    <a href={mediaUrl} target="_blank" rel="noopener noreferrer" download class="btn btn-secondary btn-sm" style={{ marginLeft: 'auto' }}>
+                    <button
+                      type="button"
+                      onClick={() => downloadFile(mediaUrl, fileName)}
+                      className="btn btn-secondary btn-sm"
+                      style={{ marginLeft: 'auto' }}
+                    >
                       Download
-                    </a>
+                    </button>
                   </div>
                   {msg.content && <p style={{ marginTop: '6px' }}>{msg.content}</p>}
                 </div>
@@ -63,10 +70,11 @@ export default function ChatLog({ messages, currentSenderName, onOpenImageModal 
                 msg.content
               )}
             </div>
-            <span class="msg-timestamp">{timeFormatted}</span>
+            <span className="msg-timestamp">{timeFormatted}</span>
           </div>
         );
       })}
     </div>
   );
 }
+

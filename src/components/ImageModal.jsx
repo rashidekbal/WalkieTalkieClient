@@ -1,19 +1,29 @@
 import React from 'react';
+import { downloadFile } from '../utils/downloadHelper';
 
 export default function ImageModal({ imageUrl, onClose }) {
   if (!imageUrl) return null;
 
+  const url = typeof imageUrl === 'object' ? imageUrl?.url : imageUrl;
+  const fileName = (typeof imageUrl === 'object' ? imageUrl?.fileName : null) || 'image.png';
+
+  const handleDownload = (e) => {
+    e.preventDefault();
+    downloadFile(url, fileName);
+  };
+
   return (
-    <div class="modal" onClick={onClose}>
-      <div class="modal-content" onClick={(e) => e.stopPropagation()}>
-        <button class="modal-close" onClick={onClose}>&times;</button>
-        <img id="modalImg" src={imageUrl} alt="Enlarged view" />
-        <div class="modal-footer">
-          <a href={imageUrl} download class="btn btn-secondary btn-sm" target="_blank" rel="noopener noreferrer">
+    <div className="modal" onClick={onClose}>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+        <button className="modal-close" onClick={onClose}>&times;</button>
+        <img id="modalImg" src={url} alt="Enlarged view" />
+        <div className="modal-footer">
+          <button type="button" onClick={handleDownload} className="btn btn-secondary btn-sm">
             Download Original
-          </a>
+          </button>
         </div>
       </div>
     </div>
   );
 }
+
