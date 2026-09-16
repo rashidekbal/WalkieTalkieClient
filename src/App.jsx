@@ -178,7 +178,7 @@ export default function App() {
       const formData = new FormData();
       formData.append('file', selectedFile);
 
-      setMessages((prev) => [...prev, { isSystem: true, text: 'Uploading file to Cloudinary...' }]);
+      setMessages((prev) => [...prev, { isSystem: true, text: 'Uploading file...' }]);
 
       try {
         const res = await fetch(`${API_BASE_URL}/api/media/upload`, {
