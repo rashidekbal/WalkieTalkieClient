@@ -29,6 +29,7 @@ export default function ChatLog({ messages, currentSenderName, onOpenImageModal 
         const defaultFileName = msg.type === 'image' ? 'image.png' : 'attachment';
         const fileName = (msg.fileMeta && msg.fileMeta.fileName) || msg.file_name || defaultFileName;
         const fileSize = (msg.fileMeta && msg.fileMeta.fileSize) || msg.file_size || 0;
+        const mimeType = (msg.fileMeta && msg.fileMeta.mimeType) || msg.mime_type || '';
         const sizeFormatted = fileSize ? `${(fileSize / 1024).toFixed(1)} KB` : '';
         const dateObj = msg.created_at ? new Date(msg.created_at) : new Date();
         const timeFormatted = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -57,7 +58,7 @@ export default function ChatLog({ messages, currentSenderName, onOpenImageModal 
                     </div>
                     <button
                       type="button"
-                      onClick={() => downloadFile(mediaUrl, fileName)}
+                      onClick={() => downloadFile(mediaUrl, fileName, mimeType)}
                       className="btn btn-secondary btn-sm"
                       style={{ marginLeft: 'auto' }}
                     >
