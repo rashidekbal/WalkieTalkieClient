@@ -53,9 +53,10 @@ export function getFileNameWithExtension(url = '', fileName = 'download', mimeTy
 
 /**
  * Direct file download helper.
- * Triggers native browser download dialog with Content-Disposition attachment header via backend proxy.
+ * Fetches the file through the server proxy as a blob to trigger native browser download
+ * without opening blank tabs or running into cross-origin download attribute restrictions.
  */
-export function downloadFile(url, fileName = 'download', mimeType = '') {
+export async function downloadFile(url, fileName = 'download', mimeType = '') {
   if (!url) return;
 
   const finalFileName = getFileNameWithExtension(url, fileName, mimeType);
@@ -71,15 +72,35 @@ export function downloadFile(url, fileName = 'download', mimeType = '') {
     return;
   }
 
-  // 2. Trigger native download via server proxy endpoint with Content-Disposition: attachment header
-  const proxyDownloadUrl = `${API_BASE_URL}/api/media/download?url=${encodeURIComponent(url)}&name=${encodeURIComponent(finalFileName)}`;
+  // 2. Fetch via proxy endpoint and trigger client-side blob download
+  try {
+    const proxyDownloadUrl = `${API_BASE_URL}/api/media/download?url=${encodeURIComponent(url)}&name=${encodeURIComponent(finalFileName)}`;
+    const response = await fetch(proxyDownloadUrl);
 
-  const link = document.createElement('a');
-  link.href = proxyDownloadUrl;
-  link.download = finalFileName;
-  link.target = '_blank';
-  link.rel = 'noopener noreferrer';
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
+    if (!response.ok) {
+      const errData = await response.json().catch(() => null);
+      throw new Error(errData?.message || `Server returned ${response.status}`);
+    }
+
+    const blob = await response.blob();
+    const blobUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = finalFileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => window.URL.revokeObjectURL(blobUrl), 1000);
+  } catch (err) {
+    console.warn('[downloadHelper] Proxy download failed, falling back to direct URL:', err.message);
+    // Fallback: Direct download link
+    const fallbackLink = document.createElement('a');
+    fallbackLink.href = url;
+    fallbackLink.download = finalFileName;
+    fallbackLink.target = '_blank';
+    fallbackLink.rel = 'noopener noreferrer';
+    document.body.appendChild(fallbackLink);
+    fallbackLink.click();
+    document.body.removeChild(fallbackLink);
+  }
 }

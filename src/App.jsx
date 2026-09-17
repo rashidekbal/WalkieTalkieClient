@@ -39,8 +39,11 @@ export default function App() {
   const [messages, setMessages] = useState([]);
   const [messageText, setMessageText] = useState('');
   const [selectedFile, setSelectedFile] = useState(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   
   const [typingNotice, setTypingNotice] = useState('');
+  const [fileErrorNotice, setFileErrorNotice] = useState('');
   const [alertMessage, setAlertMessage] = useState('');
   const [activeModalImage, setActiveModalImage] = useState(null);
 
@@ -174,43 +177,86 @@ export default function App() {
   };
 
   const handleSendMessage = async () => {
+    if (isUploading) return;
     if (!messageText.trim() && !selectedFile) return;
 
     if (selectedFile) {
-      const formData = new FormData();
-      formData.append('file', selectedFile);
+      const fileToUpload = selectedFile;
+      const isVideo = fileToUpload.type && fileToUpload.type.startsWith('video/');
+      const maxLimitBytes = isVideo ? 100 * 1024 * 1024 : 10 * 1024 * 1024;
+      const maxLimitMb = isVideo ? 100 : 10;
 
-      setMessages((prev) => [...prev, { isSystem: true, text: 'Uploading file...' }]);
+      if (fileToUpload.size > maxLimitBytes) {
+        const selectedMb = (fileToUpload.size / (1024 * 1024)).toFixed(1);
+        const limitMsg = `"${fileToUpload.name}" (${selectedMb} MB) exceeds the ${maxLimitMb} MB limit. Please select a smaller file.`;
+        setFileErrorNotice(limitMsg);
+        setMessages((prev) => [...prev, { isSystem: true, text: `⚠️ Upload blocked: ${limitMsg}` }]);
+        setSelectedFile(null);
+        return;
+      }
+
+      const textToSend = messageText.trim();
+      const formData = new FormData();
+      formData.append('file', fileToUpload);
+
+      setIsUploading(true);
+      setUploadProgress(0);
+      setFileErrorNotice('');
 
       try {
-        const res = await fetch(`${API_BASE_URL}/api/media/upload`, {
-          method: 'POST',
-          body: formData
+        const uploadResult = await new Promise((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open('POST', `${API_BASE_URL}/api/media/upload`);
+
+          if (xhr.upload) {
+            xhr.upload.onprogress = (event) => {
+              if (event.lengthComputable) {
+                const percent = Math.round((event.loaded / event.total) * 100);
+                setUploadProgress(percent);
+              }
+            };
+          }
+
+          xhr.onload = () => {
+            try {
+              const data = JSON.parse(xhr.responseText);
+              if (xhr.status >= 200 && xhr.status < 300 && data.success) {
+                resolve(data);
+              } else {
+                reject(new Error(data.message || `Upload failed with status ${xhr.status}`));
+              }
+            } catch (e) {
+              reject(new Error('Invalid response from server'));
+            }
+          };
+
+          xhr.onerror = () => reject(new Error('Network error during file upload'));
+          xhr.onabort = () => reject(new Error('Upload aborted'));
+
+          xhr.send(formData);
         });
-        const data = await res.json();
 
-        if (!data.success) {
-          setMessages((prev) => [...prev, { isSystem: true, text: `Upload failed: ${data.message}` }]);
-          return;
-        }
-
-        const { mediaUrl, mediaPublicId, fileMeta } = data.data;
+        const { mediaUrl, mediaPublicId, fileMeta } = uploadResult.data;
         const isImage = fileMeta.mimeType && fileMeta.mimeType.startsWith('image/');
 
         socketRef.current.emit('send_message', {
           roomCode,
           senderName,
           type: isImage ? 'image' : 'file',
-          content: messageText.trim() || '',
+          content: textToSend || '',
           mediaUrl,
           mediaPublicId,
           fileMeta
         });
-      } catch (err) {
-        setMessages((prev) => [...prev, { isSystem: true, text: 'Error uploading file.' }]);
-      }
 
-      setSelectedFile(null);
+        setSelectedFile(null);
+        setMessageText('');
+      } catch (err) {
+        setMessages((prev) => [...prev, { isSystem: true, text: `Upload failed: ${err.message}` }]);
+      } finally {
+        setIsUploading(false);
+        setUploadProgress(0);
+      }
     } else {
       socketRef.current.emit('send_message', {
         roomCode,
@@ -218,9 +264,9 @@ export default function App() {
         type: 'text',
         content: messageText.trim()
       });
+      setMessageText('');
     }
 
-    setMessageText('');
     socketRef.current.emit('typing', { roomCode, senderName, isTyping: false });
   };
 
@@ -244,7 +290,7 @@ export default function App() {
   };
 
   return (
-    <div class="app-container">
+    <div className="app-container">
       <ConnectingOverlay
         isConnecting={isCheckingHealth}
         isError={isHealthError}
@@ -264,7 +310,7 @@ export default function App() {
           alertMessage={alertMessage}
         />
       ) : (
-        <main class="card chat-card">
+        <main className="card chat-card">
           <ChatHeader
             roomTitle={roomTitle}
             roomCode={roomCode}
@@ -278,18 +324,69 @@ export default function App() {
             onOpenImageModal={(url, fileName) => setActiveModalImage({ url, fileName })}
           />
 
-          {typingNotice && <div class="typing-indicator">{typingNotice}</div>}
+          {typingNotice && <div className="typing-indicator">{typingNotice}</div>}
 
-          {selectedFile && (
-            <div class="upload-preview-bar">
-              <div class="preview-info">
-                <span class="preview-icon">📎</span>
-                <span class="preview-filename">{selectedFile.name}</span>
-                <span class="preview-filesize">({(selectedFile.size / 1024).toFixed(1)} KB)</span>
+          {fileErrorNotice && (
+            <div className="file-error-notice">
+              <div className="file-error-content">
+                <span className="file-error-icon">⚠️</span>
+                <span className="file-error-text">{fileErrorNotice}</span>
               </div>
-              <button class="btn-remove-attachment" onClick={() => setSelectedFile(null)}>
+              <button
+                type="button"
+                className="btn-close-error"
+                onClick={() => setFileErrorNotice('')}
+                title="Dismiss notice"
+              >
                 &times;
               </button>
+            </div>
+          )}
+
+          {selectedFile && (
+            <div className="upload-preview-bar">
+              <div className="preview-info">
+                <span className="preview-icon">📎</span>
+                <span className="preview-filename">{selectedFile.name}</span>
+                <span className="preview-filesize">
+                  ({selectedFile.size < 1024 * 1024
+                    ? `${(selectedFile.size / 1024).toFixed(1)} KB`
+                    : `${(selectedFile.size / (1024 * 1024)).toFixed(1)} MB`
+                  } &bull; max {selectedFile.type?.startsWith('video/') ? '100 MB' : '10 MB'})
+                </span>
+              </div>
+              {!isUploading && (
+                <button
+                  type="button"
+                  className="btn-remove-attachment"
+                  onClick={() => setSelectedFile(null)}
+                  title="Remove attachment"
+                >
+                  &times;
+                </button>
+              )}
+            </div>
+          )}
+
+          {isUploading && (
+            <div className="upload-progress-card">
+              <div className="upload-progress-header">
+                <div className="upload-progress-status">
+                  <span className="upload-spinner" />
+                  <span>
+                    {uploadProgress < 100
+                      ? `Uploading ${selectedFile ? selectedFile.name : 'file'}...`
+                      : 'Processing on server...'}
+                  </span>
+                </div>
+                <span className="upload-progress-percentage">{uploadProgress}%</span>
+              </div>
+              <div className="upload-progress-track">
+                <div
+                  className="upload-progress-fill"
+                  style={{ width: `${uploadProgress}%` }}
+                />
+              </div>
             </div>
           )}
 
@@ -300,6 +397,13 @@ export default function App() {
             setSelectedFile={setSelectedFile}
             onSendMessage={handleSendMessage}
             onTyping={handleTyping}
+            isUploading={isUploading}
+            onFileError={(msg) => {
+              setFileErrorNotice(msg);
+              if (msg) {
+                setMessages((prev) => [...prev, { isSystem: true, text: `⚠️ ${msg}` }]);
+              }
+            }}
           />
         </main>
       )}
